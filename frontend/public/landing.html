@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradeMind — 看清每一笔交易的真相</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #050816;
+  color: #e2e8f0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Background Effects ===== */
+.bg-glow {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0; overflow: hidden;
+}
+.bg-glow .orb {
+  position: absolute; border-radius: 50%; filter: blur(120px); opacity: 0.15;
+}
+.bg-glow .orb-1 { width: 600px; height: 600px; background: #22c55e; top: -200px; right: -100px; }
+.bg-glow .orb-2 { width: 500px; height: 500px; background: #3b82f6; bottom: -150px; left: -150px; opacity: 0.08; }
+.bg-glow .orb-3 { width: 400px; height: 400px; background: #8b5cf6; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.05; }
+
+/* ===== Nav ===== */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 32px;
+  background: rgba(5, 8, 22, 0.75);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.nav-logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.nav-logo-dot { width: 10px; height: 10px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 12px #22c55e80; }
+.nav-links { display: flex; align-items: center; gap: 32px; }
+.nav-link { font-size: 13px; font-weight: 500; color: #94a3b8; cursor: pointer; transition: color 0.2s; text-decoration: none; }
+.nav-link:hover { color: #e2e8f0; }
+.nav-cta {
+  padding: 10px 24px; border-radius: 12px; font-size: 13px; font-weight: 600;
+  background: #22c55e; color: #050816; border: none; cursor: pointer;
+  transition: all 0.2s; text-decoration: none;
+}
+.nav-cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+/* ===== Hero ===== */
+.hero {
+  position: relative; z-index: 1;
+  min-height: 100vh; display: flex; align-items: center;
+  padding: 120px 32px 80px;
+}
+.hero-inner {
+  max-width: 1200px; margin: 0 auto; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
+}
+
+.hero-text { position: relative; z-index: 2; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 16px; border-radius: 20px;
+  background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2);
+  font-size: 12px; font-weight: 500; color: #22c55e; margin-bottom: 24px;
+}
+.hero-badge-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.hero h1 {
+  font-size: 52px; font-weight: 900; line-height: 1.15; letter-spacing: -2px; margin-bottom: 20px;
+}
+.hero h1 .accent { color: #22c55e; }
+.hero p {
+  font-size: 16px; color: #94a3b8; line-height: 1.7; margin-bottom: 32px; max-width: 480px;
+}
+.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn-primary {
+  padding: 14px 32px; border-radius: 14px; font-size: 14px; font-weight: 700;
+  background: #22c55e; color: #050816; border: none; cursor: pointer;
+  transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-primary:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(34,197,94,0.3); }
+.btn-secondary {
+  padding: 14px 32px; border-radius: 14px; font-size: 14px; font-weight: 600;
+  background: transparent; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer; transition: all 0.2s; text-decoration: none;
+}
+.btn-secondary:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.04); }
+
+/* ===== Chart Area ===== */
+.hero-chart {
+  position: relative; z-index: 2;
+  background: rgba(15, 20, 40, 0.8); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 24px; padding: 24px; overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+.hero-chart canvas { width: 100%; height: 300px; display: block; }
+
+/* Floating cards */
+.float-card {
+  position: absolute; z-index: 3;
+  background: rgba(15, 20, 40, 0.95); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px; padding: 16px 20px;
+  backdrop-filter: blur(10px); animation: float 4s ease-in-out infinite;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.float-card.top {
+  top: -20px; right: -10px; animation-delay: 0s;
+}
+.float-card.bottom {
+  bottom: -20px; left: -10px; animation-delay: 2s;
+}
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float-card .fc-label { font-size: 11px; color: #64748b; font-weight: 500; margin-bottom: 4px; }
+.float-card .fc-value { font-size: 18px; font-weight: 700; }
+.float-card .fc-value.up { color: #22c55e; }
+.float-card .fc-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+/* Tooltip */
+.chart-tooltip {
+  position: absolute; z-index: 4;
+  background: rgba(5,8,22,0.95); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 12px 16px; font-size: 12px; font-family: monospace;
+  pointer-events: none; display: none; white-space: nowrap;
+}
+.chart-tooltip .tt-row { display: flex; justify-content: space-between; gap: 20px; padding: 2px 0; }
+.chart-tooltip .tt-label { color: #64748b; }
+.chart-tooltip .tt-value { color: #e2e8f0; font-weight: 600; }
+
+/* ===== Stats ===== */
+.stats { position: relative; z-index: 1; padding: 0 32px 80px; }
+.stats-inner {
+  max-width: 900px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+}
+.stat-item {
+  text-align: center; padding: 32px 24px;
+  border-radius: 20px; border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(15, 20, 40, 0.6); backdrop-filter: blur(10px);
+  transition: all 0.3s;
+}
+.stat-item:hover { border-color: rgba(34,197,94,0.3); transform: translateY(-4px); }
+.stat-number { font-size: 36px; font-weight: 900; letter-spacing: -1px; margin-bottom: 6px; }
+.stat-number.green { color: #22c55e; }
+.stat-label { font-size: 13px; color: #94a3b8; }
+
+/* ===== Features ===== */
+.features { position: relative; z-index: 1; padding: 0 32px 100px; }
+.features-inner { max-width: 1100px; margin: 0 auto; }
+.features h2 {
+  text-align: center; font-size: 32px; font-weight: 800; letter-spacing: -1px;
+  margin-bottom: 12px;
+}
+.features-sub { text-align: center; font-size: 14px; color: #64748b; margin-bottom: 48px; }
+.feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.feature-card {
+  padding: 28px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(15, 20, 40, 0.6); backdrop-filter: blur(10px);
+  transition: all 0.3s;
+}
+.feature-card:hover { border-color: rgba(34,197,94,0.2); transform: translateY(-2px); }
+.feature-icon {
+  width: 44px; height: 44px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; margin-bottom: 16px;
+}
+.feature-icon.green { background: rgba(34,197,94,0.1); color: #22c55e; }
+.feature-icon.blue { background: rgba(59,130,246,0.1); color: #3b82f6; }
+.feature-icon.purple { background: rgba(139,92,246,0.1); color: #8b5cf6; }
+.feature-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.feature-card p { font-size: 13px; color: #94a3b8; line-height: 1.7; }
+
+/* ===== CTA ===== */
+.cta { position: relative; z-index: 1; padding: 0 32px 120px; }
+.cta-inner {
+  max-width: 700px; margin: 0 auto; text-align: center;
+  padding: 60px 40px; border-radius: 28px;
+  border: 1px solid rgba(34,197,94,0.15);
+  background: linear-gradient(135deg, rgba(34,197,94,0.05) 0%, rgba(5,8,22,0.8) 100%);
+  backdrop-filter: blur(10px);
+}
+.cta h2 { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
+.cta p { font-size: 14px; color: #94a3b8; margin-bottom: 28px; line-height: 1.7; }
+
+/* ===== Footer ===== */
+.footer {
+  position: relative; z-index: 1;
+  padding: 32px; text-align: center;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px; color: #475569;
+}
+.footer a { color: #64748b; text-decoration: none; }
+.footer a:hover { color: #94a3b8; }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .hero-inner { grid-template-columns: 1fr; gap: 40px; }
+  .hero h1 { font-size: 36px; }
+  .feature-grid { grid-template-columns: 1fr; }
+  .stats-inner { grid-template-columns: 1fr; }
+  .nav-links { display: none; }
+  .hero-chart { height: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- Background glow -->
+<div class="bg-glow">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- Nav -->
+<nav class="nav">
+  <div class="nav-logo"><div class="nav-logo-dot"></div>TradeMind</div>
+  <div class="nav-links">
+    <a href="#features" class="nav-link">功能</a>
+    <a href="#" class="nav-link">价格</a>
+    <a href="#" class="nav-link">文档</a>
+    <a href="#" class="nav-link">关于</a>
+  </div>
+  <a href="#" class="nav-cta">开始使用</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <div class="hero-badge"><div class="hero-badge-dot"></div>AI 驱动的交易复盘工具</div>
+      <h1>看清<span class="accent">每一笔</span><br>交易的<span class="accent">真相</span></h1>
+      <p>不再凭感觉交易。接入 OKX 持仓数据，AI 深度分析你的每一笔操作，发现隐藏的行为模式，用数据告诉你为什么会亏、凭什么赚。</p>
+      <div class="hero-actions">
+        <a href="#" class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          免费体验 30 天
+        </a>
+        <a href="#features" class="btn-secondary">了解更多 →</a>
+      </div>
+    </div>
+
+    <div class="hero-chart" id="chart-container">
+      <canvas id="kline"></canvas>
+
+      <!-- Floating cards -->
+      <div class="float-card top">
+        <div class="fc-label">本周盈亏</div>
+        <div class="fc-value up">+$12,480</div>
+        <div class="fc-sub">胜率 67% · 8 笔交易</div>
+      </div>
+      <div class="float-card bottom">
+        <div class="fc-label">AI 情绪评分</div>
+        <div class="fc-value" style="color:#22c55e;">8.9</div>
+        <div class="fc-sub">交易纪律 · 优秀</div>
+      </div>
+
+      <!-- Tooltip -->
+      <div class="chart-tooltip" id="tooltip">
+        <div class="tt-row"><span class="tt-label">时间</span><span class="tt-value" id="tt-time">--</span></div>
+        <div class="tt-row"><span class="tt-label">开</span><span class="tt-value" id="tt-open">--</span></div>
+        <div class="tt-row"><span class="tt-label">高</span><span class="tt-value" id="tt-high">--</span></div>
+        <div class="tt-row"><span class="tt-label">低</span><span class="tt-value" id="tt-low">--</span></div>
+        <div class="tt-row"><span class="tt-label">收</span><span class="tt-value" id="tt-close">--</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<section class="stats">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <div class="stat-number green">92%</div>
+      <div class="stat-label">复盘效率提升</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number" style="color:#3b82f6;">4.8x</div>
+      <div class="stat-label">洞察深度 vs 手动分析</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number" style="color:#8b5cf6;">24/7</div>
+      <div class="stat-label">全天候 AI 分析待命</div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features" id="features">
+  <div class="features-inner">
+    <h2>不止是看 K 线</h2>
+    <p class="features-sub">从行为科学的角度，重新理解你的每一笔交易</p>
+    <div class="feature-grid">
+
+      <div class="feature-card">
+        <div class="feature-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>AI 复盘报告</h3>
+        <p>每笔平仓自动生成 AI 分析报告，标记情绪波动、入场理由、离场决策质量，让你真正看清自己的交易行为。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 8v4l2 2"/></svg>
+        </div>
+        <h3>风险仪表盘</h3>
+        <p>按情绪强度、交易时段、币种等维度自动统计盈亏分布，一眼识别你的「危险时段」和「高胜率模式」。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon purple">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>行为模式挖掘</h3>
+        <p>AI 分析你的交易序列，识别追涨杀跌、恐慌平仓、过度交易等行为模式，给出具体改进建议。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3>策略回测</h3>
+        <p>内置定投、马丁等经典策略回测引擎，可视化资金曲线，让你的交易策略有据可依。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+        </div>
+        <h3>实时 K 线</h3>
+        <p>接入 OKX WebSocket，支持多币种、多周期 K 线图表，EMA/MA 技术指标叠加，数据毫秒级更新。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon purple">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <h3>安全本地分析</h3>
+        <p>所有交易数据本地存储，不上传云端。AI 分析通过你自己的 API Key 调用，隐私完全由你掌控。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-inner">
+    <h2>准备好看清自己的交易了吗？</h2>
+    <p>30 天免费体验，无需信用卡。导入你的 OKX 交易数据，让 AI 帮你发现那些你从未注意到的交易真相。</p>
+    <a href="#" class="btn-primary" style="font-size:15px; padding:16px 40px;">免费开始使用</a>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <p>TradeMind &copy; 2026 · 数据本地处理 · 隐私优先 · <a href="#">GitHub</a></p>
+</footer>
+
+<script>
+// ========== Canvas K-line Animation ==========
+const canvas = document.getElementById('kline');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('chart-container');
+const tooltip = document.getElementById('tooltip');
+
+function resize() {
+  const rect = container.getBoundingClientRect();
+  const w = rect.width - 48;
+  canvas.width = w * devicePixelRatio;
+  canvas.height = 300 * devicePixelRatio;
+  canvas.style.width = w + 'px';
+  canvas.style.height = '300px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resize();
+window.addEventListener('resize', () => { resize(); draw(); });
+
+// Generate candle data
+const candles = [];
+const N = 80;
+let price = 65000 + Math.random() * 4000;
+const now = Date.now();
+for (let i = 0; i < N; i++) {
+  const t = now - (N - i) * 3600000;
+  const volatility = 200 + Math.random() * 600;
+  const open = price;
+  const close = open + (Math.random() - 0.48) * volatility;
+  const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+  const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+  candles.push({ t, o: open, h: high, l: low, c: close });
+  price = close;
+}
+
+function draw() {
+  const w = canvas.width / devicePixelRatio;
+  const h = canvas.height / devicePixelRatio;
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = { top: 30, right: 20, bottom: 30, left: 10 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  const prices = candles.flatMap(c => [c.h, c.l]);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP || 1;
+  const barW = Math.max(1, (cw / N) * 0.7);
+  const gap = cw / N;
+
+  // Gradient glow under curve
+  const glow = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom);
+  glow.addColorStop(0, 'rgba(34,197,94,0.12)');
+  glow.addColorStop(1, 'rgba(34,197,94,0)');
+
+  // Fill area under close price
+  ctx.beginPath();
+  ctx.moveTo(pad.left, h - pad.bottom);
+  for (let i = 0; i < N; i++) {
+    const x = pad.left + i * gap + gap / 2;
+    const y = pad.top + ch * (1 - (candles[i].c - minP) / range);
+    if (i === 0) ctx.lineTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(pad.left + (N - 1) * gap + gap / 2, h - pad.bottom);
+  ctx.closePath();
+  ctx.fillStyle = glow;
+  ctx.fill();
+
+  // Line for close
+  ctx.beginPath();
+  ctx.strokeStyle = '#22c55e';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#22c55e';
+  ctx.shadowBlur = 8;
+  for (let i = 0; i < N; i++) {
+    const x = pad.left + i * gap + gap / 2;
+    const y = pad.top + ch * (1 - (candles[i].c - minP) / range);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Candles
+  for (let i = 0; i < N; i++) {
+    const c = candles[i];
+    const x = pad.left + i * gap + gap / 2;
+    const yOpen = pad.top + ch * (1 - (c.o - minP) / range);
+    const yClose = pad.top + ch * (1 - (c.c - minP) / range);
+    const yHigh = pad.top + ch * (1 - (c.h - minP) / range);
+    const yLow = pad.top + ch * (1 - (c.l - minP) / range);
+
+    const isUp = c.c >= c.o;
+    ctx.strokeStyle = isUp ? '#22c55e' : '#ef4444';
+    ctx.fillStyle = isUp ? '#22c55e' : '#ef4444';
+
+    // Wick
+    ctx.beginPath();
+    ctx.moveTo(x, yHigh);
+    ctx.lineTo(x, yLow);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Body
+    const bodyH = Math.max(0.5, Math.abs(yClose - yOpen));
+    const bodyY = Math.min(yOpen, yClose);
+    ctx.fillRect(x - barW / 2, bodyY, barW, bodyH);
+  }
+
+  // EMA 7 line
+  const emaPeriod = 7;
+  const k = 2 / (emaPeriod + 1);
+  let emaVal = candles[0].c;
+  ctx.beginPath();
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  for (let i = 0; i < N; i++) {
+    emaVal = candles[i].c * k + emaVal * (1 - k);
+    const x = pad.left + i * gap + gap / 2;
+    const y = pad.top + ch * (1 - (emaVal - minP) / range);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(w - pad.right, y);
+    ctx.stroke();
+  }
+}
+
+draw();
+
+// Mouse tooltip
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const w = canvas.width / devicePixelRatio;
+  const pad = { top: 30, right: 20, bottom: 30, left: 10 };
+  const cw = w - pad.left - pad.right;
+  const gap = cw / N;
+
+  const idx = Math.round((mx - pad.left) / gap - 0.5);
+  if (idx < 0 || idx >= N) { tooltip.style.display = 'none'; return; }
+
+  const c = candles[idx];
+  const d = new Date(c.t);
+  document.getElementById('tt-time').textContent =
+    d.toLocaleDateString('zh-CN', { month:'short', day:'numeric', hour:'2-digit' }) + ':' + d.getMinutes().toString().padStart(2,'0');
+  document.getElementById('tt-open').textContent = '$' + c.o.toFixed(2);
+  document.getElementById('tt-high').textContent = '$' + c.h.toFixed(2);
+  document.getElementById('tt-low').textContent = '$' + c.l.toFixed(2);
+  document.getElementById('tt-close').textContent = '$' + c.c.toFixed(2);
+
+  tooltip.style.display = 'block';
+  const ttx = Math.min(e.clientX - container.getBoundingClientRect().left + 16, container.getBoundingClientRect().width - 180);
+  const tty = e.clientY - container.getBoundingClientRect().top - 100;
+  tooltip.style.left = ttx + 'px';
+  tooltip.style.top = tty + 'px';
+});
+
+canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+// Animate — slowly shift prices to simulate live
+let phase = 0;
+function animate() {
+  phase += 0.02;
+  for (let i = 0; i < N; i++) {
+    const wiggle = Math.sin(i * 0.3 + phase) * 80;
+    candles[i].c = candles[i].c + wiggle * 0.01;
+    candles[i].h = Math.max(candles[i].h, candles[i].c + Math.abs(wiggle) * 0.3);
+    candles[i].l = Math.min(candles[i].l, candles[i].c - Math.abs(wiggle) * 0.3);
+  }
+  draw();
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laplace Market — AI-Powered Trading Analytics</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  @property --gradient-angle{syntax:"<angle>";inherits:false;initial-value:0deg}
+  @property --gradient-angle-offset{syntax:"<angle>";inherits:false;initial-value:0deg}
+  @property --gradient-percent{syntax:"<percentage>";inherits:false;initial-value:20%}
+  @property --gradient-shine{syntax:"<color>";inherits:false;initial-value:#3b82f6}
+
+  body{
+    background:#070707;
+    color:#fafafa;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+    cursor:default;
+  }
+
+  /* ===== Particle Canvas ===== */
+  #particleCanvas{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+  }
+
+  /* ===== Gradient Blur ===== */
+  .gradient-blur{
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+  }
+  .gradient-blur>div,.gradient-blur:before,.gradient-blur:after{position:absolute;left:0;right:0;}
+  .gradient-blur:before{
+    content:"";top:0;height:100%;
+    backdrop-filter:blur(.5px);-webkit-backdrop-filter:blur(.5px);
+    mask:linear-gradient(to top,transparent 0%,#000 12.5%,#000 25%,transparent 37.5%);
+    -webkit-mask:linear-gradient(to top,transparent 0%,#000 12.5%,#000 25%,transparent 37.5%);
+  }
+  .gradient-blur>div:nth-of-type(1){z-index:2;height:100%;backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);mask:linear-gradient(to top,transparent 12.5%,#000 25%,#000 37.5%,transparent 50%);-webkit-mask:linear-gradient(to top,transparent 12.5%,#000 25%,#000 37.5%,transparent 50%)}
+  .gradient-blur>div:nth-of-type(2){z-index:3;height:100%;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);mask:linear-gradient(to top,transparent 25%,#000 37.5%,#000 50%,transparent 62.5%);-webkit-mask:linear-gradient(to top,transparent 25%,#000 37.5%,#000 50%,transparent 62.5%)}
+  .gradient-blur>div:nth-of-type(3){z-index:4;height:100%;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);mask:linear-gradient(to top,transparent 37.5%,#000 50%,#000 62.5%,transparent 75%);-webkit-mask:linear-gradient(to top,transparent 37.5%,#000 50%,#000 62.5%,transparent 75%)}
+  .gradient-blur>div:nth-of-type(4){z-index:5;height:100%;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);mask:linear-gradient(to top,transparent 50%,#000 62.5%,#000 75%,transparent 87.5%);-webkit-mask:linear-gradient(to top,transparent 50%,#000 62.5%,#000 75%,transparent 87.5%)}
+  .gradient-blur>div:nth-of-type(5){z-index:6;height:100%;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);mask:linear-gradient(to top,transparent 62.5%,#000 75%,#000 87.5%,transparent 100%);-webkit-mask:linear-gradient(to top,transparent 62.5%,#000 75%,#000 87.5%,transparent 100%)}
+  .gradient-blur>div:nth-of-type(6){z-index:7;height:100%;backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);mask:linear-gradient(to top,transparent 75%,#000 87.5%,#000 100%);-webkit-mask:linear-gradient(to top,transparent 75%,#000 87.5%,#000 100%)}
+  .gradient-blur:after{content:"";z-index:8;height:100%;backdrop-filter:blur(64px);-webkit-backdrop-filter:blur(64px);mask:linear-gradient(to top,transparent 87.5%,#000 100%);-webkit-mask:linear-gradient(to top,transparent 87.5%,#000 100%)}
+
+  /* ===== Grid ===== */
+  .bg-grid{
+    position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.025;
+    background-image:linear-gradient(rgba(255,255,255,.9) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.9) 1px,transparent 1px);
+    background-size:96px 96px;
+    mask:linear-gradient(180deg,transparent 0%,#000 16%,#000 78%,transparent 100%);
+    -webkit-mask:linear-gradient(180deg,transparent 0%,#000 16%,#000 78%,transparent 100%);
+  }
+
+  /* ===== Nav ===== */
+  nav{
+    position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;
+    padding:1.25rem 2rem;max-width:1200px;margin:0 auto;
+  }
+  nav .logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:.95rem;color:#fff;letter-spacing:-.3px}
+  nav .logo .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.5)}
+  nav .links{display:flex;gap:2rem;font-size:.8rem;color:#888}
+  nav .links a{color:#888;text-decoration:none;transition:color .2s}
+  nav .links a:hover{color:#fff}
+
+  /* ===== Shiny CTA ===== */
+  .shiny-cta{
+    --gradient-angle:0deg;--gradient-angle-offset:0deg;--gradient-percent:20%;--gradient-shine:#3b82f6;
+    position:relative;overflow:hidden;border-radius:9999px;
+    padding:.9rem 2.5rem;font-size:1rem;font-weight:500;line-height:1.2;
+    color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+    background:linear-gradient(#000,#000) padding-box,
+      conic-gradient(from calc(var(--gradient-angle) - var(--gradient-angle-offset)),
+        transparent 0%,#2563eb 5%,var(--gradient-shine) 15%,#2563eb 30%,transparent 40%,transparent 100%) border-box;
+    border:2px solid transparent;outline:none;
+    box-shadow:inset 0 0 0 1px #1a1818;
+    transition:--gradient-angle-offset .8s cubic-bezier(.25,1,.5,1),
+      --gradient-percent .8s cubic-bezier(.25,1,.5,1),
+      --gradient-shine .8s cubic-bezier(.25,1,.5,1),box-shadow .3s;
+    isolation:isolate;z-index:0;
+    animation:border-spin 2.5s linear infinite;
+    text-decoration:none;
+  }
+  .shiny-cta:hover{--gradient-angle-offset:45deg;--gradient-percent:30%;--gradient-shine:#60a5fa}
+  .shiny-cta:active{transform:translateY(1px)}
+  @keyframes border-spin{to{--gradient-angle:360deg}}
+  .shiny-cta:before{
+    content:"";pointer-events:none;position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);z-index:0;
+    --size:calc(100% - 6px);--position:2px;--space:4px;
+    width:var(--size);height:var(--size);
+    background:radial-gradient(circle at var(--position) var(--position),white .5px,transparent 0) padding-box;
+    background-size:var(--space) var(--space);background-repeat:space;
+    mask-image:conic-gradient(from calc(var(--gradient-angle) + 45deg),black,transparent 10% 90%,black);
+    -webkit-mask-image:conic-gradient(from calc(var(--gradient-angle) + 45deg),black,transparent 10% 90%,black);
+    border-radius:inherit;opacity:.4;
+  }
+  .shiny-cta:after{
+    content:"";pointer-events:none;position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);z-index:1;
+    --size:calc(100% + 1rem);width:var(--size);height:var(--size);
+    background:linear-gradient(-50deg,transparent,#2563eb,transparent);
+    mask-image:radial-gradient(circle at bottom,transparent 40%,black);
+    -webkit-mask-image:radial-gradient(circle at bottom,transparent 40%,black);
+    border-radius:inherit;opacity:.5;
+    animation:shimmer 4s linear infinite;
+  }
+  @keyframes shimmer{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+  /* ===== Hero ===== */
+  .hero{
+    position:relative;z-index:10;text-align:center;
+    padding:9rem 2rem 8rem;max-width:800px;margin:0 auto;
+  }
+  .hero .tag{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:5px 16px;border-radius:20px;font-size:.78rem;color:#a3a3a3;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+    margin-bottom:2rem;
+  }
+  .hero .tag .live{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.6)}
+  .hero h1{font-size:clamp(2.8rem,7vw,5rem);font-weight:800;line-height:1.04;letter-spacing:-2px;color:#fff;margin-bottom:1.25rem}
+  .hero h1 .accent{background:linear-gradient(135deg,#22c55e,#4ade80,#a3e635);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .hero .sub{font-size:1.05rem;color:#888;max-width:520px;margin:0 auto 2.5rem;line-height:1.6}
+
+  /* ===== Modules Section ===== */
+  .modules{
+    position:relative;z-index:10;
+    max-width:1100px;margin:0 auto;padding:0 2rem 5rem;
+  }
+  .module{
+    display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center;
+    padding:3rem 0;border-top:1px solid rgba(255,255,255,.04);
+    opacity:0;transform:translateY(30px);
+    transition:opacity .8s ease,transform .8s cubic-bezier(.25,1,.5,1);
+  }
+  .module.visible{opacity:1;transform:translateY(0)}
+  .module:nth-child(even){direction:rtl}
+  .module:nth-child(even) .mod-text{direction:ltr}
+  .module:nth-child(even) .mod-visual{direction:ltr}
+
+  .mod-text .mod-num{
+    font-size:.7rem;font-weight:600;letter-spacing:1px;color:#444;
+    text-transform:uppercase;margin-bottom:.75rem;
+  }
+  .mod-text h2{font-size:1.8rem;font-weight:700;letter-spacing:-.6px;line-height:1.2;margin-bottom:.85rem;color:#fafafa}
+  .mod-text p{font-size:.92rem;color:#777;line-height:1.65;max-width:420px}
+  .mod-text .mod-tags{display:flex;gap:.5rem;margin-top:1.25rem;flex-wrap:wrap}
+  .mod-text .mod-tags span{
+    font-size:.7rem;padding:4px 12px;border-radius:8px;
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);color:#888;
+  }
+
+  /* Visual cards */
+  .mod-visual{
+    display:flex;align-items:center;justify-content:center;
+  }
+  .viz-card{
+    width:100%;max-width:440px;
+    background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.04);
+    border-radius:20px;padding:2rem;
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    box-shadow:0 4px 30px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.02) inset;
+    position:relative;overflow:hidden;
+  }
+  .viz-card:before{
+    content:"";position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);
+  }
+  .viz-icon{
+    width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    margin-bottom:1rem;
+  }
+  .viz-stat{display:flex;gap:1.5rem;margin-top:1.5rem}
+  .viz-stat div{text-align:center}
+  .viz-stat div .n{font-size:1.5rem;font-weight:700;font-family:"SF Mono",monospace;line-height:1.1}
+  .viz-stat div .l{font-size:.65rem;color:#666;margin-top:.25rem;text-transform:uppercase;letter-spacing:.5px}
+
+  /* Animated bars in card */
+  .viz-bars{display:flex;align-items:flex-end;gap:6px;height:80px;margin:1rem 0}
+  .viz-bar{
+    flex:1;border-radius:4px;background:rgba(255,255,255,.06);
+    animation:barPulse 2s ease-in-out infinite;
+    transition:height .4s ease;
+  }
+  .viz-bar:nth-child(odd){background:rgba(34,197,94,.12)}
+  @keyframes barPulse{0%,100%{opacity:.7}50%{opacity:1}}
+
+  /* Mini chart in card */
+  .mini-chart{width:100%;height:80px;margin:1rem 0;position:relative}
+  .mini-chart svg{width:100%;height:100%}
+  .mini-chart path{fill:none;stroke-width:2}
+
+  /* ===== Numbers ===== */
+  .nums{
+    position:relative;z-index:10;
+    display:flex;justify-content:center;gap:4rem;flex-wrap:wrap;
+    padding:2.5rem 0;border-top:1px solid rgba(255,255,255,.04);
+    max-width:1100px;margin:0 auto;text-align:center;
+  }
+  .nums .n .big{display:block;font-size:1.6rem;font-weight:700;color:#fafafa}
+  .nums .n .txt{font-size:.75rem;color:#666;margin-top:2px}
+
+  /* CTA section */
+  .cta-section{
+    position:relative;z-index:10;text-align:center;padding:3rem 2rem 6rem;
+  }
+  .cta-section p{font-size:.95rem;color:#888;margin-bottom:1.75rem}
+
+  footer{
+    position:relative;z-index:10;text-align:center;
+    padding:1.5rem 0;color:#444;font-size:.7rem;
+    border-top:1px solid rgba(255,255,255,.04);
+  }
+
+  @media(max-width:768px){
+    .module{grid-template-columns:1fr;gap:2rem}
+    .module:nth-child(even){direction:ltr}
+    .hero h1{font-size:2.2rem}
+    .mod-text h2{font-size:1.4rem}
+    .hero{padding:4rem 1rem 4rem}
+    .nums{gap:2rem}
+    nav .links{display:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- Particles -->
+<canvas id="particleCanvas"></canvas>
+
+<!-- Gradient Blur -->
+<div class="gradient-blur">
+  <div></div><div></div><div></div><div></div><div></div><div></div>
+</div>
+
+<!-- Grid -->
+<div class="bg-grid"></div>
+
+<!-- Nav -->
+<nav>
+  <div class="logo"><span class="dot"></span>Laplace Market</div>
+  <div class="links">
+    <a href="#">Market</a><a href="#">Strategies</a><a href="#">AI Analysis</a><a href="#">Docs</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="tag"><span class="live"></span>AI Trading Analytics — Live</div>
+  <h1>See the truth<br>behind every <span class="accent">trade</span></h1>
+  <p class="sub">AI-powered trading analysis platform. Auto-sync positions, diagnose behavioral patterns, uncover what's really costing you money.</p>
+  <a href="#" class="shiny-cta">Start Free Trial →</a>
+</section>
+
+<!-- Modules -->
+<section class="modules">
+
+  <!-- Module 1: Smart Charts -->
+  <div class="module" data-animate>
+    <div class="mod-text">
+      <div class="mod-num">01 · Charts</div>
+      <h2>Professional-grade K-line analysis</h2>
+      <p>TradingView-level candlestick charts with MACD, RSI, and Bollinger Bands. Real-time WebSocket data from Gate.io and OKX with automatic reconnection.</p>
+      <div class="mod-tags"><span>MACD</span><span>RSI</span><span>Bollinger</span><span>WebSocket</span><span>Sub-second</span></div>
+    </div>
+    <div class="mod-visual">
+      <div class="viz-card">
+        <div class="viz-icon" style="background:rgba(34,197,94,.08)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="4" width="20" height="14" rx="2"/><polyline points="2 10 9 14 12 10 22 15"/></svg>
+        </div>
+        <div class="viz-stat">
+          <div><div class="n" style="color:#22c55e">$97,234</div><div class="l">BTC/USDT</div></div>
+          <div><div class="n" style="color:#22c55e">+2.34%</div><div class="l">24h Change</div></div>
+          <div><div class="n" style="color:#fafafa">1H</div><div class="l">Timeframe</div></div>
+        </div>
+        <div class="viz-bars" id="vizBars1"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module 2: AI Diagnosis -->
+  <div class="module" data-animate>
+    <div class="mod-text">
+      <div class="mod-num">02 · AI Engine</div>
+      <h2>Deep behavioral pattern recognition</h2>
+      <p>Our AI analyzes every trade against your historical patterns. It spots emotional entries, timing weaknesses, and leverage abuse — then gives you actionable advice in plain language.</p>
+      <div class="mod-tags"><span>LLM Analysis</span><span>Pattern Detection</span><span>Risk Scoring</span><span>Weekly Reports</span></div>
+    </div>
+    <div class="mod-visual">
+      <div class="viz-card">
+        <div class="viz-icon" style="background:rgba(59,130,246,.08)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="mini-chart" id="miniAi"></div>
+        <div class="viz-stat">
+          <div><div class="n" style="color:#22c55e">68.4%</div><div class="l">Win Rate</div></div>
+          <div><div class="n" style="color:#ef4444">-12.3%</div><div class="l">Max Drawdown</div></div>
+          <div><div class="n" style="color:#3b82f6">2.41</div><div class="l">Sharpe</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module 3: Strategy Backtesting -->
+  <div class="module" data-animate>
+    <div class="mod-text">
+      <div class="mod-num">03 · Backtesting</div>
+      <h2>Validate before you risk capital</h2>
+      <p>Run DCA and Martingale strategies against historical OHLCV data. View equity curves, ROI, max drawdown, and per-trade PnL — all computed locally in milliseconds.</p>
+      <div class="mod-tags"><span>DCA</span><span>Martingale</span><span>Equity Curve</span><span>PnL Analysis</span></div>
+    </div>
+    <div class="mod-visual">
+      <div class="viz-card">
+        <div class="viz-icon" style="background:rgba(139,92,246,.08)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <div class="mini-chart" id="miniBt"></div>
+        <div class="viz-stat">
+          <div><div class="n" style="color:#22c55e">+12.8%</div><div class="l">Best ROI</div></div>
+          <div><div class="n" style="color:#f59e0b">347</div><div class="l">Total Trades</div></div>
+          <div><div class="n" style="color:#a78bfa">2.1s</div><div class="l">Compute Time</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module 4: OKX Integration -->
+  <div class="module" data-animate>
+    <div class="mod-text">
+      <div class="mod-num">04 · Integration</div>
+      <h2>One-click OKX position sync</h2>
+      <p>Connect your OKX account via API key. Historical positions are automatically imported with PnL calculated. No more spreadsheets, no more manual data entry.</p>
+      <div class="mod-tags"><span>OKX API</span><span>Auto Import</span><span>PnL Calc</span><span>CSV Export</span></div>
+    </div>
+    <div class="mod-visual">
+      <div class="viz-card">
+        <div class="viz-icon" style="background:rgba(245,158,11,.08)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>
+        </div>
+        <div class="viz-stat">
+          <div><div class="n" style="color:#fafafa">Instant</div><div class="l">Setup Time</div></div>
+          <div><div class="n" style="color:#22c55e">$48M+</div><div class="l">Volume Tracked</div></div>
+          <div><div class="n" style="color:#f59e0b">99.9%</div><div class="l">Accuracy</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- Numbers -->
+<div class="nums">
+  <div class="n"><span class="big">1,200+</span><span class="txt">Active Traders</span></div>
+  <div class="n"><span class="big">$48M+</span><span class="txt">Volume Analyzed</span></div>
+  <div class="n"><span class="big">99.9%</span><span class="txt">Data Accuracy</span></div>
+  <div class="n"><span class="big">24/7</span><span class="txt">AI Monitoring</span></div>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+  <p>Ready to see what your trading data is hiding?</p>
+  <a href="#" class="shiny-cta">Start Free Trial →</a>
+</section>
+
+<footer>&copy; 2026 Laplace Market. Built for traders who want to see the truth.</footer>
+
+<script>
+// ===== Particle System =====
+(function(){
+  const c=document.getElementById('particleCanvas'),ctx=c.getContext('2d'),dpr=devicePixelRatio||1;
+  const particles=[];
+  const MAX=80;
+
+  function resize(){
+    c.width=innerWidth*dpr;c.height=innerHeight*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';
+  }
+
+  for(let i=0;i<MAX;i++){
+    particles.push({
+      x:Math.random()*innerWidth,y:Math.random()*innerHeight,
+      vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,
+      r:.5+Math.random()*1.5,o:.15+Math.random()*.35,
+    });
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=innerWidth;if(p.x>innerWidth)p.x=0;
+      if(p.y<0)p.y=innerHeight;if(p.y>innerHeight)p.y=0;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(255,255,255,${p.o})`;ctx.fill();
+    });
+    // Draw connections
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<100){
+          ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle=`rgba(255,255,255,${.03*(1-d/100)})`;ctx.lineWidth=.5;ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize();draw();addEventListener('resize',resize);
+})();
+
+// ===== Scroll Reveal =====
+(function(){
+  const observer=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}});
+  },{threshold:.15,rootMargin:'-50px'});
+  document.querySelectorAll('[data-animate]').forEach(el=>observer.observe(el));
+})();
+
+// ===== Animated Bars in Module 1 =====
+(function(){
+  const el=document.getElementById('vizBars1');if(!el)return;
+  function tick(){
+    el.innerHTML='';
+    for(let i=0;i<12;i++){
+      const h=20+Math.random()*60;
+      const bar=document.createElement('div');bar.className='viz-bar';
+      bar.style.height=h+'px';bar.style.animationDelay=(i*.15)+'s';
+      el.appendChild(bar);
+    }
+    setTimeout(tick,2500);
+  }
+  tick();
+})();
+
+// ===== Mini Charts in Cards =====
+(function(){
+  // AI module mini chart
+  const ai=document.getElementById('miniAi');if(ai){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 400 80');svg.style.width='100%';svg.style.height='80px';
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('stroke','#3b82f6');path.setAttribute('fill','none');path.setAttribute('stroke-width','2');
+    let d='M0,50';for(let x=5;x<400;x+=5){d+=` L${x},${30+Math.sin(x*.03)*20+Math.sin(x*.08)*10}`}
+    path.setAttribute('d',d);svg.appendChild(path);
+
+    const grad=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
+    grad.id='aig';grad.setAttribute('x1','0');grad.setAttribute('y1','0');grad.setAttribute('x2','0');grad.setAttribute('y2','1');
+    const s1=document.createElementNS('http://www.w3.org/2000/svg','stop');s1.setAttribute('offset','0');s1.setAttribute('stop-color','#3b82f6');s1.setAttribute('stop-opacity','.2');
+    const s2=document.createElementNS('http://www.w3.org/2000/svg','stop');s2.setAttribute('offset','1');s2.setAttribute('stop-color','#3b82f6');s2.setAttribute('stop-opacity','0');
+    grad.appendChild(s1);grad.appendChild(s2);svg.appendChild(grad);
+
+    const area=document.createElementNS('http://www.w3.org/2000/svg','path');
+    d+=' L400,80 L0,80 Z';area.setAttribute('d',d);area.setAttribute('fill','url(#aig)');svg.appendChild(area);
+    ai.appendChild(svg);
+  }
+
+  // Backtest module mini chart
+  const bt=document.getElementById('miniBt');if(bt){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 400 80');svg.style.width='100%';svg.style.height='80px';
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('stroke','#a78bfa');path.setAttribute('fill','none');path.setAttribute('stroke-width','2');
+    let d='M0,60';let y=60;for(let x=5;x<400;x+=5){y+=Math.random()*6-2.8;y=Math.max(10,Math.min(75,y));d+=` L${x},${y}`}
+    path.setAttribute('d',d);svg.appendChild(path);
+
+    const grad=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
+    grad.id='btg';grad.setAttribute('x1','0');grad.setAttribute('y1','0');grad.setAttribute('x2','0');grad.setAttribute('y2','1');
+    const s1=document.createElementNS('http://www.w3.org/2000/svg','stop');s1.setAttribute('offset','0');s1.setAttribute('stop-color','#a78bfa');s1.setAttribute('stop-opacity','.2');
+    const s2=document.createElementNS('http://www.w3.org/2000/svg','stop');s2.setAttribute('offset','1');s2.setAttribute('stop-color','#a78bfa');s2.setAttribute('stop-opacity','0');
+    grad.appendChild(s1);grad.appendChild(s2);svg.appendChild(grad);
+
+    const area=document.createElementNS('http://www.w3.org/2000/svg','path');
+    d+=' L400,80 L0,80 Z';area.setAttribute('d',d);area.setAttribute('fill','url(#btg)');svg.appendChild(area);
+    bt.appendChild(svg);
+  }
+
+  // Animate backtest chart
+  let btPath=null,btArea=null;
+  setTimeout(()=>{
+    const bt=document.getElementById('miniBt');if(!bt)return;
+    btPath=bt.querySelector('path');
+    btArea=bt.querySelectorAll('path')[1];
+  },100);
+  setInterval(()=>{
+    if(!btPath)return;
+    let d='M0,60';let y=60;for(let x=5;x<400;x+=5){y+=Math.random()*6-2.8;y=Math.max(10,Math.min(75,y));d+=` L${x},${y}`}
+    btPath.setAttribute('d',d);
+    if(btArea){d+=' L400,80 L0,80 Z';btArea.setAttribute('d',d)}
+  },2000);
+})();
+</script>
+</body>
+</html>
