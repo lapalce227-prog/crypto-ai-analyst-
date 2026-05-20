@@ -67,6 +67,9 @@ export default function KLineChart(){
     const vSer=chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:''});vSer.priceScale().applyOptions({scaleMargins:{top:0.82,bottom:0}})
     chartRef.current=chart;candleRef.current=cSer;volumeRef.current=vSer
 
+    // ResizeObserver: chart resizes when AI panel opens/closes
+    const roMain=new ResizeObserver(()=>{const w=el.clientWidth;if(w>0&&w!==chart.options().width)chart.applyOptions({width:w})});roMain.observe(el)
+
     // Crosshair tip
     const tip=document.createElement('div')
     tip.style.cssText='position:absolute;z-index:10;pointer-events:none;display:none;background:rgba(20,22,26,.96);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:8px 10px;font-size:11px;font-family:"SF Mono",monospace;line-height:1.55;color:#d4d4d8;box-shadow:0 4px 24px rgba(0,0,0,.5);min-width:155px'
@@ -128,7 +131,7 @@ export default function KLineChart(){
         setConnected(true)
       }
     }
-    return ()=>{cancelled=true;if(wsRef.current){try{wsRef.current.close()}catch{};wsRef.current=null};if(wsTimerRef.current)clearTimeout(wsTimerRef.current);if(pollTimer)clearInterval(pollTimer);chart.remove()}
+    return ()=>{cancelled=true;if(wsRef.current){try{wsRef.current.close()}catch{};wsRef.current=null};if(wsTimerRef.current)clearTimeout(wsTimerRef.current);if(pollTimer)clearInterval(pollTimer);roMain.disconnect();chart.remove()}
   },[symbol,tfIdx,dataSource])
 
   // ---- EMA ----
@@ -147,7 +150,7 @@ export default function KLineChart(){
   useEffect(()=>{const chart=chartRef.current;if(!chart)return;const h=(param)=>{if(!drawMode||!param.point)return;const t=chart.timeScale().coordinateToTime(param.point.x);if(!t)return;const v=chart.priceScale('right').coordinateToPrice(param.point.y);if(v==null)return;if(!drawPtRef.current){drawPtRef.current={time:t,value:v};return};chart.addSeries(LineSeries,{color:'#f59e0b',lineWidth:1.5,priceLineVisible:false,lastValueVisible:false}).setData([{time:drawPtRef.current.time,value:drawPtRef.current.value},{time:t,value:v}]);drawPtRef.current=null};chart.subscribeClick(h);return()=>chart.unsubscribeClick(h)},[drawMode])
 
   const selectSymbol=(s,idx=false)=>{setIsIndex(idx);setSymbol(s);setConnected(false)}
-  const sendChat=async()=>{if(!chatInput.trim())return;const q=chatInput;setChatInput('');setChatMsgs(m=>[...m,{role:'user',content:q}]);setChatLoading(true);try{const res=await apiFetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:`当前${symbol} $ ${price}。${q}`})});const data=await res.json();if(res.ok)setChatMsgs(m=>[...m,{role:'assistant',content:data.answer}])}catch{setChatMsgs(m=>[...m,{role:'assistant',content:'AI 服务暂不可用'}])};setChatLoading(false)}
+  const sendChat=async()=>{if(!chatInput.trim())return;const q=chatInput;setChatInput('');setChatMsgs(m=>[...m,{role:'user',content:q}]);setChatLoading(true);try{const res=await apiFetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});const data=await res.json();if(res.ok){setChatMsgs(m=>[...m,{role:'assistant',content:data.answer||'(空响应)'}])}else{setChatMsgs(m=>[...m,{role:'assistant',content:'错误: '+(data.detail||res.status)}])}}catch(e){setChatMsgs(m=>[...m,{role:'assistant',content:'AI 服务暂不可用: '+e.message}])};setChatLoading(false)}
 
   const btnS='text-[11px] h-7 px-2.5 rounded border border-[#1E2329] bg-[#0B0E11] text-[#848E9C] hover:text-white hover:border-[#333] transition-all font-medium'
   const btnA='text-[11px] h-7 px-2.5 rounded bg-white text-black font-medium'
@@ -186,7 +189,7 @@ export default function KLineChart(){
           <div className="flex justify-between items-center px-3 py-2.5 border-b border-[#1E2329]"><span className="text-sm font-semibold text-[#d4d4d8]">AI 分析</span><button onClick={()=>setShowAI(false)} className="bg-transparent border-0 text-[#848E9C] cursor-pointer hover:text-white"><X size={14}/></button></div>
           <div className="flex-1 overflow-auto p-3 space-y-2">{chatMsgs.map((m,i)=><div key={i} style={{alignSelf:m.role==='user'?'flex-end':'flex-start',maxWidth:'90%'}}><span className="text-[10px] text-[#848E9C] mb-0.5 block">{m.role==='user'?'你':'AI'}</span><div className={`px-3 py-2 rounded-xl text-xs leading-relaxed whitespace-pre-wrap ${m.role==='user'?'bg-white text-black':'bg-[#1a1d24] text-[#d4d4d8]'}`}>{m.content}</div></div>)}</div>
           {chatLoading&&<div className="text-[11px] text-[#848E9C] px-3">AI 思考中...</div>}
-          <div className="p-2.5 border-t border-[#1E2329] flex gap-2"><input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendChat()} placeholder={`问AI关于 ${symbol} 的走势...`} className="flex-1 h-8 text-xs bg-[#1a1d24] border border-[#1E2329] rounded px-3 text-[#d4d4d8] outline-none focus:border-[#333]"/><Button size="icon" className="h-8 w-8 shrink-0" onClick={sendChat} disabled={chatLoading}><Send size={12}/></Button></div>
+          <div className="p-2.5 border-t border-[#1E2329] flex gap-2"><form onSubmit={e=>{e.preventDefault();sendChat()}} className="flex-1 flex gap-2"><input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder={`问AI关于 ${symbol} 的走势...`} className="flex-1 h-8 text-xs bg-[#1a1d24] border border-[#1E2329] rounded px-3 text-[#d4d4d8] outline-none focus:border-[#333]"/><Button type="submit" size="icon" className="h-8 w-8 shrink-0" disabled={chatLoading}><Send size={12}/></Button></form></div>
         </div>}
       </div>
     </div>
