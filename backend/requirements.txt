@@ -6,3 +6,7 @@ pydantic-settings==2.5.0
 python-dotenv==1.0.1
 bcrypt==4.3.0
 pyjwt==2.9.0
+langgraph>=1.0.2
+langchain>=1.0.5
+langchain-openai>=1.0.2
+langchain-core>=1.0.4

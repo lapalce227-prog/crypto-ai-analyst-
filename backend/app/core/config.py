@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     vision_api_key: str = ""
     vision_base_url: str = "https://api.openai.com"
     vision_model: str = "gpt-4o"
+    # OpenAI (agent tool calling)
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5-mini"
+    # DashScope / 千问 (国内 agent)
+    dash_api_key: str = ""
+    dash_model: str = "qwen-plus"
     # Server
     port: int = 8000
     # CryptoPanic

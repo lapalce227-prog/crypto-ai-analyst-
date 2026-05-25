@@ -1,6 +1,7 @@
 import { useContext } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthContext } from './context/AuthContext'
+import { AgentProvider } from './context/AgentContext'
 import { TradeProvider } from './context/TradeContext'
 import AppLayout from './components/layout/AppLayout'
 import Login from './pages/Login'
@@ -59,20 +60,22 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<HomeRoute />} />
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} />
-      <Route element={<ProtectedLayout />}>
-        <Route path="kline" element={<KLineChart />} />
-        <Route path="journal" element={<TradeJournalPage />} />
-        <Route path="ai" element={<AiPage />} />
-        <Route path="dashboard" element={<RiskDashboard />} />
-        <Route path="import" element={<OkxImport />} />
-        <Route path="news" element={<NewsPage />} />
-        <Route path="backtest" element={<StrategyBacktest />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <AgentProvider>
+      <Routes>
+        <Route path="/" element={<HomeRoute />} />
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} />
+        <Route element={<ProtectedLayout />}>
+          <Route path="kline" element={<KLineChart />} />
+          <Route path="journal" element={<TradeJournalPage />} />
+          <Route path="ai" element={<AiPage />} />
+          <Route path="dashboard" element={<RiskDashboard />} />
+          <Route path="import" element={<OkxImport />} />
+          <Route path="news" element={<NewsPage />} />
+          <Route path="backtest" element={<StrategyBacktest />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AgentProvider>
   )
 }

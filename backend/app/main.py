@@ -4,7 +4,26 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router as api_router
 from app.api.auth import router as auth_router
 
-app = FastAPI(title="Laplace Market", version="0.3.0")
+app = FastAPI(title="Laplace Market", version="0.4.0")
+
+
+@app.on_event("startup")
+async def startup():
+    from app.services.agent_graph import agent_graph
+    from app.services.alert_service import alert_service
+    # Pre-warm LangGraph agent
+    try:
+        await agent_graph.create_graph()
+    except Exception:
+        pass
+    # Start background alert monitoring (60s intervals)
+    await alert_service.start(interval_seconds=60)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    from app.services.alert_service import alert_service
+    await alert_service.stop()
 
 app.add_middleware(
     CORSMiddleware,

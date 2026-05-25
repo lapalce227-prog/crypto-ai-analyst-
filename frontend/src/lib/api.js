@@ -1,4 +1,4 @@
-export const API_BASE = 'https://crypto-ai-analyst-production.up.railway.app'
+export const API_BASE = import.meta.env.DEV ? '' : 'https://crypto-ai-analyst-production.up.railway.app'
 
 export async function apiFetch(path, options = {}) {
   const token = localStorage.getItem('auth_token')

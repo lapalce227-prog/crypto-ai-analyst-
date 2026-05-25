@@ -1,7 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from app.models.trade import TradeCreate, AIQuestion, AIResponse, ReviewRequest, DiagnoseResponse, OkxImportRequest, OkxConfigRequest, OkxHistoryRequest
+import json
 from app.services.trade_service import trade_service
+from app.services.agent_tools import AGENT_TOOLS
 from app.services.ai_service import ai_service
+from app.services.agent_graph import agent_graph
+from app.services.alert_service import alert_service
+from app.services.agent_history_service import agent_history_service
 from app.services.okx_service import okx_service
 from app.services.pnl_calculator import pnl_calculator, PnLCalculator
 from app.services.auth_service import get_current_user
@@ -85,6 +91,96 @@ async def ai_diagnose(user: dict = Depends(get_current_user)):
         return DiagnoseResponse(**result)
     except Exception:
         return DiagnoseResponse(message="AI 服务暂时不可用")
+
+# ===== Agent 对话（LangGraph + OpenAI tool calling）=====
+
+@router.post("/ai/agent/chat")
+async def agent_chat(data: dict, user: dict = Depends(get_current_user)):
+    """Agent 对话（非流式）。消息格式: {messages: [{role, content}]}"""
+    messages = data.get("messages", [])
+    if not messages:
+        raise HTTPException(400, "messages 为空")
+    try:
+        result = await agent_graph.chat(messages, session_id=str(user.get("id", "default")))
+        return {"messages": result}
+    except Exception as e:
+        raise HTTPException(500, f"Agent 错误: {e}")
+
+
+@router.post("/ai/agent/chat/stream")
+async def agent_chat_stream(data: dict, user: dict = Depends(get_current_user)):
+    """Agent 对话（SSE 流式）。消息格式同上。"""
+    messages = data.get("messages", [])
+    if not messages:
+        raise HTTPException(400, "messages 为空")
+
+    async def event_gen():
+        try:
+            async for chunk in agent_graph.stream_chat(messages, session_id=str(user.get("id", "default"))):
+                yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+            yield f"data: {json.dumps({'content': '', 'done': True})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': str(e), 'done': True, 'error': True})}\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+# ===== 告警中心 =====
+
+@router.get("/ai/alerts")
+async def list_alerts(user: dict = Depends(get_current_user)):
+    return alert_service.get_all(user.get("id", 0))
+
+
+@router.post("/ai/alerts")
+async def add_alert_endpoint(data: dict, user: dict = Depends(get_current_user)):
+    """添加价格提醒。{symbol, condition: above/below, target_price}"""
+    symbol = data.get("symbol", "").upper()
+    condition = data.get("condition", "below")
+    target_price = float(data.get("target_price", 0))
+    if not symbol or target_price <= 0:
+        raise HTTPException(400, "symbol 或 target_price 无效")
+    return await alert_service.add(symbol, condition, target_price, user.get("id", 0))
+
+
+@router.delete("/ai/alerts/{alert_id}")
+async def dismiss_alert(alert_id: int, user: dict = Depends(get_current_user)):
+    ok = alert_service.dismiss(alert_id)
+    if not ok:
+        raise HTTPException(404, "提醒不存在")
+    return {"status": "dismissed"}
+
+
+# ===== Agent 对话历史 =====
+
+@router.get("/ai/agent/history")
+async def list_agent_history(user: dict = Depends(get_current_user)):
+    return agent_history_service.list(user.get("id", 0))
+
+
+@router.get("/ai/agent/history/{history_id}")
+async def load_agent_history(history_id: int, user: dict = Depends(get_current_user)):
+    entry = agent_history_service.load(history_id)
+    if not entry:
+        raise HTTPException(404, "历史记录不存在")
+    return entry
+
+
+@router.post("/ai/agent/history")
+async def save_agent_history(data: dict, user: dict = Depends(get_current_user)):
+    """保存当前对话。{messages: [...], title?: string}"""
+    messages = data.get("messages", [])
+    title = data.get("title", "")
+    if not messages:
+        raise HTTPException(400, "messages 为空")
+    return agent_history_service.save(messages, user.get("id", 0), title)
+
+
+@router.delete("/ai/agent/history/{history_id}")
+async def delete_agent_history(history_id: int, user: dict = Depends(get_current_user)):
+    agent_history_service.delete(history_id)
+    return {"status": "deleted"}
+
 
 # ===== 统计概览 =====
 
