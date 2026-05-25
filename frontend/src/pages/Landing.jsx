@@ -1,13 +1,14 @@
 import { useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 
-gsap.registerPlugin(useGSAP)
+gsap.registerPlugin(ScrollTrigger, useGSAP)
 
-function Chars({ text }) {
+function Chars({ text, className = 'char' }) {
   return text.split('').map((ch, i) => (
-    <span key={i} className='char' style={{ display: 'inline-block', whiteSpace: ch === ' ' ? 'pre' : undefined }}>
+    <span key={i} className={className} style={{ display: 'inline-block', whiteSpace: ch === ' ' ? 'pre' : undefined }}>
       {ch === ' ' ? ' ' : ch}
     </span>
   ))
@@ -33,17 +34,34 @@ export default function Landing() {
   }, [])
 
   useGSAP(() => {
-    const tl = gsap.timeline()
+    const tl = gsap.timeline({
+      scrollTrigger: { trigger: '.hero-section', start: 'top 85%', toggleActions: 'play reverse play reverse' },
+    })
     tl.from('.line1 .char', { y: 140, autoAlpha: 0, skewY: 8, stagger: { each: 0.04, from: 'start' }, duration: 1.1, ease: 'power4.out' })
     tl.from('.line2', { y: 110, autoAlpha: 0, duration: 1, ease: 'power4.out' }, '-=0.55')
     tl.from('.hero-desc', { y: 25, autoAlpha: 0, duration: 0.8, ease: 'power3.out' }, '-=0.4')
-    gsap.to('.line1, .line2', { y: -5, duration: 4, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: 2.8 })
-    // Gradient slowly sweeps left to right
-    gsap.to('.line2 .gradient-text', { backgroundPosition: '100% center', duration: 6, repeat: -1, yoyo: true, ease: 'none' })
+    gsap.to('.line1', { y: -5, duration: 4, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: 2.8 })
+  }, { scope: app })
+
+  useGSAP(() => {
+    for (let i = 0; i < 4; i++) {
+      gsap.from(`.module-title-${i} .char`, {
+        scrollTrigger: { trigger: `.module-section-${i}`, start: 'top 72%', toggleActions: 'play reverse play reverse' },
+        y: 60, autoAlpha: 0,
+        stagger: { each: 0.035, from: 'start' },
+        duration: 0.7, ease: 'power4.out',
+      })
+    }
   }, { scope: app })
 
   return (
     <div ref={app} className='bg-[#050505] text-[#F5F1E8] overflow-x-hidden' style={{ fontFamily: '"Inter Tight", system-ui, sans-serif' }}>
+      <style>{`
+        @keyframes sweep {
+          0% { background-position: 0% center; }
+          100% { background-position: -200% center; }
+        }
+      `}</style>
 
       {/* Ambient blobs */}
       <div className='amb-1 fixed pointer-events-none rounded-full' style={{ width: 700, height: 700, top: '-20%', left: '-10%', filter: 'blur(140px)', background: 'radial-gradient(circle, rgba(139,92,246,0.25), transparent 70%)' }} />
@@ -60,15 +78,15 @@ export default function Landing() {
       </nav>
 
       {/* Module 1: Hero */}
-      <section className='relative z-10 min-h-screen flex flex-col items-center justify-center px-6'>
+      <section className='hero-section relative z-10 min-h-screen flex flex-col items-center justify-center px-6'>
         <h1 className='mb-8 select-none text-center' style={{ fontSize: 'clamp(3.5rem, 11vw, 9rem)', fontWeight: 800, lineHeight: 0.88, letterSpacing: '-0.04em' }}>
           <div className='line1'><Chars text='Rational' /></div>
           <div className='line2'>
             <span className='gradient-text' style={{
-              background: 'linear-gradient(90deg, #8B5CF6, #EC4899, #0ae448, #60a5fa, #a78bfa, #8B5CF6)',
+              background: 'linear-gradient(90deg, #8B5CF6, #EC4899, #f59e0b, #60a5fa, #a78bfa, #8B5CF6, #EC4899, #f59e0b, #60a5fa, #a78bfa, #8B5CF6)',
               backgroundSize: '200% 100%',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              animation: 'sweep 6s linear infinite',
             }}>Trading</span>
           </div>
         </h1>
@@ -82,13 +100,13 @@ export default function Landing() {
       {[
         { n: '01', title: 'Precision', sub: 'K-line Charts', desc: 'TradingView-level candlestick. Real-time WebSocket, MACD, RSI, Bollinger Bands.', color: '#F5F1E8' },
         { n: '02', title: 'Intelligence', sub: 'AI Agent', desc: 'LangGraph-powered engine. Natural language queries, streaming SSE, 4 built-in tools.', color: '#8B5CF6' },
-        { n: '03', title: 'Velocity', sub: 'Strategy Backtest', desc: 'DCA, Martingale, Grid. OHLCV backtesting in milliseconds.', color: '#0ae448' },
+        { n: '03', title: 'Velocity', sub: 'Strategy Backtest', desc: 'DCA, Martingale, Grid. OHLCV backtesting in milliseconds.', color: '#f59e0b' },
         { n: '04', title: 'Integration', sub: 'OKX Auto Sync', desc: 'One-click position import. Auto P&L. Price alerts with persistent storage.', color: '#EC4899' },
       ].map((m, i) => (
-        <section key={i} className='relative z-10 min-h-[70vh] flex flex-col justify-center max-w-[900px] mx-auto px-6'>
+        <section key={i} className={`module-section-${i} relative z-10 min-h-[70vh] flex flex-col justify-center max-w-[900px] mx-auto px-6`}>
           <div className='text-[.7rem] tracking-[0.15em] mb-6' style={{ color: m.color }}>{m.n}</div>
-          <h2 className='mb-5' style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.03em', color: m.color }}>
-            {m.title}
+          <h2 className={`module-title-${i} mb-5`} style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.03em', color: m.color }}>
+            <Chars text={m.title} />
           </h2>
           <p className='text-[clamp(1rem,2vw,1.3rem)] mb-3 leading-relaxed max-w-[600px] font-medium' style={{ color: '#a0a0a0' }}>{m.sub}</p>
           <p className='text-[.9rem] leading-relaxed max-w-[500px]' style={{ color: '#888' }}>{m.desc}</p>
