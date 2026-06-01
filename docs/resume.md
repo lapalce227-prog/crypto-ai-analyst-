@@ -35,7 +35,7 @@ Python / 全栈开发工程师（实习） · 大三在读 · 2027 届
 
 独立开发 | 2026.04 - 2026.05 | [GitHub](https://github.com/lapalce227-prog/crypto-ai-analyst-/tree/main/redis-cache-system)
 
-- 基于 FastAPI + Redis 构建高并发文章阅读系统，用 JMeter 压测定位瓶颈：无缓存 QPS 仅 380，P99 延迟 420ms；引入 Cache-Aside 模式后 QPS 提升至 8200+，P99 降至 12ms
+- 基于 FastAPI + Redis 构建高并发文章阅读系统，用 JMeter 压测定位瓶颈：单请求延迟 89ms（模拟 DB 查询 80ms）；引入 Cache-Aside 模式后降至 0.8ms，10 并发下 QPS 从 270 提升至 1400+，P99 延迟从 90ms 降至 24ms
 - 用布隆过滤器拦截不存在文章的恶意查询，误判率 0.1%，缓存穿透请求占比从 35% 降至 0；热点文章设置互斥锁防止缓存击穿，同一时间仅 1 个请求重建缓存
 - 设计多级过期策略（热点 key 续期 + 随机偏移量防雪崩），缓存命中率稳定在 92%+；Redis Sentinel 三节点高可用，主从切换时间 ≤ 3s
 - 实现缓存全量监控面板：命中率时序图、key 空间分布、慢查询 Top 10、内存碎片率告警，Prometheus + Grafana 可视化
