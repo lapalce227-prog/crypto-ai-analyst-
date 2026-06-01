@@ -12,7 +12,7 @@ Python / 全栈开发工程师（实习） · 大三在读 · 2027 届
 
 | 分级 | 技术栈 |
 |------|--------|
-| **精通** | Python, FastAPI, Pydantic v2, React 18, TypeScript, Tailwind CSS, SQLite |
+| **熟练使用** | Python, FastAPI, Pydantic v2, React 18, TypeScript, Tailwind CSS, SQLite |
 | **熟悉** | LangGraph, LangChain, LLM Tool Calling, SSE 流式输出, Prompt Engineering, Redis, shadcn/ui, GSAP (ScrollTrigger / SplitText), Framer Motion, Git, Vite, JWT + bcrypt, RESTful API |
 | **了解** | Node.js, PostgreSQL, Docker, SQLAlchemy, Nginx, CI/CD (GitHub Actions), Railway, Cloudflare Pages, JMeter, Prometheus + Grafana |
 
@@ -33,7 +33,7 @@ Python / 全栈开发工程师（实习） · 大三在读 · 2027 届
 
 ### 高并发缓存系统 — Redis 缓存深度优化实战
 
-独立开发 | 2026.04 - 2026.05 | [GitHub](https://github.com/lapalce227-prog)
+独立开发 | 2026.04 - 2026.05 | [GitHub](https://github.com/lapalce227-prog/crypto-ai-analyst-/tree/main/redis-cache-system)
 
 - 基于 FastAPI + Redis 构建高并发文章阅读系统，用 JMeter 压测定位瓶颈：无缓存 QPS 仅 380，P99 延迟 420ms；引入 Cache-Aside 模式后 QPS 提升至 8200+，P99 降至 12ms
 - 用布隆过滤器拦截不存在文章的恶意查询，误判率 0.1%，缓存穿透请求占比从 35% 降至 0；热点文章设置互斥锁防止缓存击穿，同一时间仅 1 个请求重建缓存
@@ -52,4 +52,4 @@ Python / 全栈开发工程师（实习） · 大三在读 · 2027 届
 
 ## 自我评价
 
-我能独立完成从数据库设计到前端交互动效的全链路开发，尤其在 LLM Agent 方向具备完整的工程落地能力（LangGraph Tool Calling → 多模型路由 → SSE 流式输出 → 生产部署）。在校期间从零构建了加密交易分析平台并上线运行，Agent 模块支持 5 类数据工具实时调用和图片识别。期望在实习中深入真实产品的后端或全栈开发，在高并发、分布式系统等工程挑战中快速成长。
+我能独立完成从数据库设计到前端交互动效的全链路开发，在 LLM Agent 和缓存架构两个方向具备完整的工程落地能力（LangGraph Tool Calling → SSE 流式输出 → Redis 多级缓存 → 生产部署）。在校期间从零构建了加密交易分析平台和高并发缓存系统并上线运行。期望在实习中深入真实产品的后端或全栈开发，在高并发、分布式系统等工程挑战中快速成长。
