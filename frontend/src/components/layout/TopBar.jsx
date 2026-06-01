@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
 import { Button } from '../ui/button'
-import { LogOut, ChevronDown, Sun, Moon } from 'lucide-react'
+import { LogOut, ChevronDown, Sun, Moon, Brain } from 'lucide-react'
 
 const pageTitles = {
   '/journal': '交易记录',
@@ -24,7 +24,7 @@ const pageTitles = {
   '/news': '新闻',
 }
 
-export default function TopBar() {
+export default function TopBar({ agentOpen, onToggleAgent }) {
   const { user, logout } = useContext(AuthContext)
   const { mode, resolved, toggle } = useTheme()
   const navigate = useNavigate()
@@ -44,6 +44,18 @@ export default function TopBar() {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Agent toggle */}
+        <button
+          onClick={onToggleAgent}
+          className={`h-8 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 border-0 cursor-pointer transition-all ${
+            agentOpen
+              ? 'bg-brand-green/10 text-brand-green border border-brand-green/30'
+              : 'bg-secondary text-muted-foreground hover:text-foreground border border-transparent'
+          }`}
+        >
+          <Brain size={14} />
+          Agent
+        </button>
         {/* Theme toggle */}
         <Button
           variant="ghost" size="icon" className="h-8 w-8"

@@ -3,6 +3,7 @@
 import json
 import httpx
 from langchain_core.tools import tool
+from app.core.config import settings
 
 OKX_API = "https://www.okx.com"
 GATE_API = "https://api.gateio.ws/api/v4"
@@ -22,11 +23,56 @@ async def get_kline(symbol: str, timeframe: str = "1H", limit: int = 100) -> str
 
     Returns JSON: {symbol, timeframe, last_price, change_24h_pct, high_24h, low_24h, volume_24h, recent_candles: [...最近的{limit}根]}
     """
+    import time as _time
+
     pair = symbol.replace("-", "_")
     gate_tf = KF_REVERSE.get(timeframe, "1h")
 
     async with httpx.AsyncClient(timeout=10) as client:
-        # Gate.io first (accessible from China)
+        # Hyperliquid DEX first (no API key, globally accessible)
+        if timeframe not in ("1s", "15s"):
+            try:
+                coin = symbol.split("-")[0].upper()
+                hl_tf_map = {"1m": "1m", "5m": "5m", "15m": "15m", "1H": "1h", "4H": "4h", "1D": "1d"}
+                hl_tf = hl_tf_map.get(timeframe)
+                if hl_tf:
+                    secs_map = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
+                    secs = secs_map.get(hl_tf, 3600)
+                    end_ms = int(_time.time() * 1000)
+                    start_ms = end_ms - limit * secs * 1000
+                    resp = await client.post(
+                        "https://api.hyperliquid.xyz/info",
+                        json={"type": "candleSnapshot", "req": {"coin": coin, "interval": hl_tf, "startTime": start_ms, "endTime": end_ms}},
+                        timeout=8,
+                    )
+                    if resp.status_code == 200:
+                        raw = resp.json()
+                        if isinstance(raw, list) and raw:
+                            candles = []
+                            for d in raw:
+                                candles.append({
+                                    "time": int(float(d["t"]) / 1000),
+                                    "open": float(d["o"]), "high": float(d["h"]),
+                                    "low": float(d["l"]), "close": float(d["c"]),
+                                    "volume": float(d["v"]),
+                                })
+                            if candles:
+                                last = candles[-1]["close"]
+                                first = candles[0]["close"]
+                                chg = (last - first) / first * 100 if first else 0
+                                n = min(limit, 96)
+                                return json.dumps({
+                                    "symbol": symbol, "timeframe": timeframe,
+                                    "last_price": last, "change_24h_pct": round(chg, 2),
+                                    "high_24h": max(c["high"] for c in candles[-n:]),
+                                    "low_24h": min(c["low"] for c in candles[-n:]),
+                                    "volume_24h": round(sum(c["volume"] for c in candles[-n:]), 2),
+                                    "recent_candles": candles,
+                                }, ensure_ascii=False)
+            except Exception:
+                pass
+
+        # Gate.io
         try:
             resp = await client.get(
                 f"{GATE_API}/spot/candlesticks",
@@ -246,3 +292,98 @@ def _calc_stats(trades: list) -> dict:
 
 
 AGENT_TOOLS = [get_kline, get_funding_rate, get_user_trades, get_coin_info]
+
+
+@tool
+async def analyze_image(image_base64: str, question: str = "请详细描述这张图片的内容") -> str:
+    """分析用户上传的图片（K线走势图、交易记录截图、持仓截图等）。当用户发送图片需要识别分析时调用此工具。
+
+    Args:
+        image_base64: 图片的base64编码字符串（不含 data:image 前缀）
+        question: 用户关于图片的具体问题，默认为请详细描述
+
+    Returns JSON: {analysis: 图片分析文本}
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.dash_api_key}"},
+            json={
+                "model": "qwen-vl-plus",
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+                        {"type": "text", "text": question},
+                    ]
+                }],
+                "max_tokens": 800,
+                "temperature": 0.3,
+            },
+        )
+        data = resp.json()
+        if resp.status_code != 200:
+            return json.dumps({"error": f"视觉模型调用失败: {data.get('error', {}).get('message', str(data))}"}, ensure_ascii=False)
+        content = data["choices"][0]["message"]["content"]
+        return json.dumps({"analysis": content}, ensure_ascii=False)
+
+
+@tool
+async def get_crypto_news(limit: int = 10) -> str:
+    """获取最新的加密货币新闻快讯。当用户询问"最近有什么新闻"、"市场热点"、"重大消息"时调用。
+
+    Args:
+        limit: 返回新闻条数，默认10条
+
+    Returns JSON: {articles: [{title, url, source, published_at, importance}...], count}
+    """
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+
+    FEEDS = [
+        ("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/"),
+        ("CoinTelegraph", "https://cointelegraph.com/rss"),
+        ("Decrypt", "https://decrypt.co/feed"),
+    ]
+    TIER1 = {"CoinDesk", "CoinTelegraph"}
+
+    results = []
+    async with httpx.AsyncClient(timeout=12) as client:
+        for source_name, url in FEEDS:
+            try:
+                resp = await client.get(url, headers={"User-Agent": "Laplace/1.0"})
+                if resp.status_code != 200:
+                    continue
+                root = ET.fromstring(resp.text)
+                for item in root.iter("item"):
+                    title = (item.findtext("title", "") or "").strip()
+                    link = (item.findtext("link", "") or "").strip()
+                    pub_date = item.findtext("pubDate", "") or item.findtext("dc:date", "") or ""
+                    if not title or not link:
+                        continue
+                    try:
+                        dt = parsedate_to_datetime(pub_date)
+                    except Exception:
+                        from datetime import datetime, timezone
+                        dt = datetime.now(timezone.utc)
+                    results.append({
+                        "title": title,
+                        "url": link,
+                        "published_at": dt.isoformat(),
+                        "source": source_name,
+                        "important": source_name in TIER1,
+                    })
+            except Exception:
+                continue
+
+    results.sort(key=lambda r: r["published_at"], reverse=True)
+    top = results[:limit]
+
+    return json.dumps({
+        "articles": top,
+        "count": len(top),
+    }, ensure_ascii=False)
+
+
+AGENT_TOOLS.append(analyze_image)
+AGENT_TOOLS.append(get_crypto_news)

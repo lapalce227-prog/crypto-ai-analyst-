@@ -26,6 +26,8 @@ SYSTEM_PROMPT = """你是 Laplace Agent，一个冷静、专业的加密货币�
 - **get_funding_rate** — 资金费率
 - **get_user_trades** — 用户交易记录与统计
 - **get_coin_info** — 币种背景信息（市值、流通量等）
+- **analyze_image** — 分析用户上传的图片（K线图、交易截图等），当用户发送图片时自动调用此工具
+- **get_crypto_news** — 获取最新加密货币新闻快讯，当用户问"最近有什么新闻"、"市场热点"时调用
 
 ## 行为准则
 1. 不喊单、不给买卖建议，只提供客观数据和分析
@@ -58,6 +60,55 @@ class AgentGraph:
             self._llm = (llm, bound)
         return self._llm[0], self._llm[1]
 
+    async def _analyze_image_internal(self, image_base64: str, question: str) -> str:
+        """Call Qwen VL model to analyze an image, return text description."""
+        import httpx
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.dash_api_key}"},
+                json={
+                    "model": "qwen-vl-plus",
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+                            {"type": "text", "text": question or "请详细描述这张图片的内容，包括所有可见的数字、文字和趋势"},
+                        ]
+                    }],
+                    "max_tokens": 800,
+                    "temperature": 0.3,
+                },
+            )
+            data = resp.json()
+            if resp.status_code != 200:
+                error_msg = data.get("error", {}).get("message", str(data))
+                return f"[图像分析失败: {error_msg}]"
+            return data["choices"][0]["message"]["content"]
+
+    @staticmethod
+    def _extract_image_from_content(content) -> tuple:
+        """Extract base64 image and text question from multimodal content.
+        Returns (image_base64, text_question) or (None, None) if no image found.
+        """
+        if not isinstance(content, list):
+            return None, None
+        image_base64 = None
+        text_parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "image_url":
+                    url = block.get("image_url", {}).get("url", "")
+                    if url.startswith("data:image"):
+                        image_base64 = url.split(",", 1)[1] if "," in url else url
+                    else:
+                        image_base64 = url
+                elif block.get("type") == "text":
+                    text_parts.append(block.get("text", ""))
+        if image_base64 is None:
+            return None, None
+        return image_base64, " ".join(text_parts)
+
     async def create_graph(self) -> CompiledStateGraph:
         if self._graph is None:
             builder = StateGraph(AgentState)
@@ -67,6 +118,24 @@ class AgentGraph:
                 current = list(state["messages"])
                 if not any(isinstance(m, SystemMessage) for m in current):
                     current = [SystemMessage(content=SYSTEM_PROMPT)] + current
+
+                # Preprocess: convert image messages to text for the text-only LLM
+                last_user_idx = None
+                for i in range(len(current) - 1, -1, -1):
+                    if isinstance(current[i], HumanMessage):
+                        last_user_idx = i
+                        break
+
+                for i, m in enumerate(current):
+                    if isinstance(m, HumanMessage):
+                        img_b64, question = self._extract_image_from_content(m.content)
+                        if img_b64:
+                            if i == last_user_idx:
+                                analysis = await self._analyze_image_internal(img_b64, question)
+                                text_content = f"[用户发送了一张图片，以下是图片识别结果]\n\n{analysis}\n\n请根据以上信息回答用户的问题。用户原文：{question}"
+                            else:
+                                text_content = f"[用户之前发送了一张图片：{question}]"
+                            current[i] = HumanMessage(content=text_content)
 
                 response = await llm_with_tools.ainvoke(current)
 
@@ -118,22 +187,45 @@ class AgentGraph:
         result = await graph.ainvoke(input_payload, config)
         return _extract_messages(result.get("messages", []))
 
-    async def stream_chat(self, messages: list[dict], session_id: str = "default") -> AsyncGenerator[str, None]:
-        """Streaming agent chat — yields content fragments as they arrive."""
+    async def stream_chat(self, messages: list[dict], session_id: str = "default") -> AsyncGenerator[dict, None]:
+        """Streaming agent chat — yields structured events: {type: text|tool_start|tool_end, ...}"""
         graph = await self._get_graph()
         config = {"configurable": {"thread_id": session_id}}
         input_content = messages[-1]["content"] if messages else ""
         input_payload = {"messages": [HumanMessage(content=input_content)]}
 
-        async for token, _ in graph.astream(input_payload, config, stream_mode="messages"):
-            if isinstance(token, AIMessageChunk):
-                content = token.content
-                if isinstance(content, str) and content:
-                    yield content
-                elif isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and "text" in block:
-                            yield block["text"]
+        try:
+            async for event in graph.astream_events(input_payload, config, version="v2"):
+                kind = event["event"]
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"].get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        content = chunk.content
+                        if isinstance(content, str) and content.strip():
+                            yield {"type": "text", "content": content}
+                        elif isinstance(content, list):
+                            for block in content:
+                                if isinstance(block, dict) and block.get("text"):
+                                    yield {"type": "text", "content": block["text"]}
+                elif kind == "on_tool_start":
+                    tool_name = event["name"]
+                    tool_input = event["data"].get("input", {})
+                    # Sanitize: remove large base64 from args display
+                    safe_args = {k: (v[:50] + "..." if isinstance(v, str) and len(v) > 50 else v) for k, v in tool_input.items()}
+                    yield {"type": "tool_start", "tool": tool_name, "args": safe_args}
+                elif kind == "on_tool_end":
+                    yield {"type": "tool_end", "tool": event["name"]}
+        except Exception:
+            # Fallback: if astream_events fails, use simple stream
+            async for token, _ in graph.astream(input_payload, config, stream_mode="messages"):
+                if isinstance(token, AIMessageChunk):
+                    content = token.content
+                    if isinstance(content, str) and content:
+                        yield {"type": "text", "content": content}
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("text"):
+                                yield {"type": "text", "content": block["text"]}
 
     async def add_alert(self, symbol: str, condition: str, target_price: float, user_id: int = 0) -> dict:
         from app.services.alert_service import alert_service

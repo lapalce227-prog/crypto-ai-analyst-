@@ -116,16 +116,65 @@ export default function KLineChart(){
     if(dataSource==='okx'){
       if(tf.hasWs){
         let wsActive=true
-        const connectWs=(url,msg)=>{
+        const updateCandle=(c)=>{
+          if(!c)return
+          try{cSer.update(c);vSer.update({time:c.time,value:c.vol,color:c.close>=c.open?'rgba(0,176,97,0.3)':'rgba(239,68,68,0.3)'})}catch{}
+          setPrice(c.close)
+          const data=candleDataRef.current,last=data[data.length-1]
+          if(last&&last.time===c.time)data[data.length-1]={...last,open:c.open,high:c.high,low:c.low,close:c.close}
+          else data.push({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close})
+        }
+        const connectWs=(url,msg,parseFn)=>{
           if(!wsActive)return;let ws;try{ws=new WebSocket(url)}catch{return};wsRef.current=ws
-          ws.onopen=()=>{if(wsActive)setConnected(true);ws.send(JSON.stringify(msg))}
-          ws.onmessage=(e)=>{if(!wsActive)return;const m=JSON.parse(e.data);let c;if(m.data?.length>0){const d=m.data[0];c={time:Math.floor(Number(d[0])/(Number(d[0])>1e12?1000:1)),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4]),vol:parseFloat(d[5]||0)}}else if(m.result?.t){c={time:Math.floor(Number(m.result.t)),open:parseFloat(m.result.o),high:parseFloat(m.result.h),low:parseFloat(m.result.l),close:parseFloat(m.result.c),vol:parseFloat(m.result.v||0)}};if(c){try{cSer.update(c);vSer.update({time:c.time,value:c.vol,color:c.close>=c.open?'rgba(0,176,97,0.3)':'rgba(239,68,68,0.3)'})}catch{};setPrice(c.close);const data=candleDataRef.current,last=data[data.length-1];if(last&&last.time===c.time)data[data.length-1]={...last,open:c.open,high:c.high,low:c.low,close:c.close};else data.push({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close})}}
-          const reconnect=()=>{if(wsActive){setConnected(false);wsTimerRef.current=setTimeout(()=>connectWs(url,msg),3000)}}
+          ws.onopen=()=>{if(wsActive)setConnected(true);if(typeof msg==='string')ws.send(msg);else ws.send(JSON.stringify(msg))}
+          ws.onmessage=(e)=>{
+            if(!wsActive)return
+            try{const m=JSON.parse(e.data);const c=parseFn(m);if(c)updateCandle(c)}catch{}
+          }
+          const reconnect=()=>{if(wsActive){setConnected(false);wsTimerRef.current=setTimeout(()=>connectWs(url,msg,parseFn),3000)}}
           ws.onclose=()=>{if(wsRef.current===ws)reconnect()};ws.onerror=()=>{if(wsRef.current===ws)reconnect()}
         }
+
+        // ---- Hyperliquid WS (primary) ----
+        const coin=symbol.split('-')[0]
+        const hlTfMap={candle1m:'1m',candle5m:'5m',candle15m:'15m',candle1H:'1h',candle4H:'4h',candle1Dutc:'1d'}
+        const hlTf=hlTfMap[tf.ws]
+        if(hlTf){
+          connectWs('wss://api.hyperliquid.xyz/ws',
+            {method:'subscribe',subscription:{type:'candle',coin,interval:hlTf}},
+            (m)=>{
+              if(m.channel==='candle'&&m.data){const d=m.data;return{time:Math.floor(Number(d.t)/1000),open:parseFloat(d.o),high:parseFloat(d.h),low:parseFloat(d.l),close:parseFloat(d.c),vol:parseFloat(d.v||0)}}
+              return null
+            })
+        }
+
+        // ---- Gate.io fallback (after 3s) ----
         const gt=tf.bar.replace('H','h').replace('D','d')
-        connectWs('wss://ws.gateio.ws/v4/',{time:Math.floor(Date.now()/1000),channel:'spot.candlesticks',event:'subscribe',payload:[gt,symbol.replace('-','_')]})
-        setTimeout(()=>{if(!connected&&wsActive&&wsRef.current?.readyState!==WebSocket.OPEN){try{wsRef.current?.close()}catch{};connectWs('wss://ws.okx.com:8443/ws/v5/public',{op:'subscribe',args:[{channel:tf.ws,instId:symbol}]})}},3000)
+        setTimeout(()=>{
+          if(!connected&&wsActive){
+            try{wsRef.current?.close()}catch{}
+            connectWs('wss://ws.gateio.ws/v4/',
+              {time:Math.floor(Date.now()/1000),channel:'spot.candlesticks',event:'subscribe',payload:[gt,symbol.replace('-','_')]},
+              (m)=>{
+                if(m.data?.length>0){const d=m.data[0];return{time:Math.floor(Number(d[0])/(Number(d[0])>1e12?1000:1)),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4]),vol:parseFloat(d[5]||0)}}
+                if(m.result?.t)return{time:Math.floor(Number(m.result.t)),open:parseFloat(m.result.o),high:parseFloat(m.result.h),low:parseFloat(m.result.l),close:parseFloat(m.result.c),vol:parseFloat(m.result.v||0)}
+                return null
+              })
+          }
+        },3000)
+
+        // ---- OKX fallback (after 6s) ----
+        setTimeout(()=>{
+          if(!connected&&wsActive&&wsRef.current?.readyState!==WebSocket.OPEN){
+            try{wsRef.current?.close()}catch{}
+            connectWs('wss://ws.okx.com:8443/ws/v5/public',
+              {op:'subscribe',args:[{channel:tf.ws,instId:symbol}]},
+              (m)=>{
+                if(m.data?.length>0){const d=m.data[0];return{time:Math.floor(Number(d[0])/(Number(d[0])>1e12?1000:1)),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4]),vol:parseFloat(d[5]||0)}}
+                return null
+              })
+          }
+        },6000)
       }else{
         pollTimer=setInterval(async()=>{try{const r=await fetch(`/api/okx/candles?instId=${symbol}&bar=${tf.bar}&limit=2`);const json=await r.json();if(json.code==='0'&&json.data?.length){const d=json.data[json.data.length-1];const c={time:parseTime(d[0]),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4]),vol:parseFloat(d[5]||0)};try{cSer.update(c);vSer.update({time:c.time,value:c.vol,color:c.close>=c.open?'rgba(0,176,97,0.3)':'rgba(239,68,68,0.3)'})}catch{};setPrice(c.close)}}catch{}},2000)
         setConnected(true)

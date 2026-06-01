@@ -116,8 +116,8 @@ async def agent_chat_stream(data: dict, user: dict = Depends(get_current_user)):
 
     async def event_gen():
         try:
-            async for chunk in agent_graph.stream_chat(messages, session_id=str(user.get("id", "default"))):
-                yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+            async for event in agent_graph.stream_chat(messages, session_id=str(user.get("id", "default"))):
+                yield f"data: {json.dumps({**event, 'done': False})}\n\n"
             yield f"data: {json.dumps({'content': '', 'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'content': str(e), 'done': True, 'error': True})}\n\n"
@@ -320,14 +320,23 @@ async def analyze_chart_image(data: dict, user: dict = Depends(get_current_user)
 
 @router.get("/okx/candles")
 async def proxy_okx_candles(instId: str = "BTC-USDT", bar: str = "1H", limit: int = 300):
-    """代理 K线数据 — Gate.io 优先（国内可达），OKX 兜底"""
-    import httpx
+    """代理 K线数据 — Hyperliquid 优先 → Gate.io → OKX 兜底"""
+    import httpx, time
 
     pair = instId.replace("-", "_")
     tf_map = {"1s": "1s", "15s": "15s", "1m": "1m", "5m": "5m", "15m": "15m", "1H": "1h", "4H": "4h", "1D": "1d"}
     gate_tf = tf_map.get(bar, "1h")
 
-    # 先试 Gate.io（国内可用）
+    # Hyperliquid 不支持 1s / 15s 超短周期，直接跳 Gate.io
+    if bar not in ("1s", "15s"):
+        try:
+            candles = await _fetch_hyperliquid_candles(instId, bar, limit, httpx)
+            if candles:
+                return {"code": "0", "data": candles}
+        except Exception:
+            pass
+
+    # Gate.io
     async with httpx.AsyncClient(timeout=10) as client:
         try:
             resp = await client.get(
@@ -347,7 +356,7 @@ async def proxy_okx_candles(instId: str = "BTC-USDT", bar: str = "1H", limit: in
         except Exception:
             pass
 
-    # Gate.io 失败 → OKX
+    # OKX
     async with httpx.AsyncClient(timeout=5) as client:
         try:
             resp = await client.get(
@@ -362,6 +371,61 @@ async def proxy_okx_candles(instId: str = "BTC-USDT", bar: str = "1H", limit: in
             pass
 
     return {"code": "1", "msg": "数据源不可用", "data": []}
+
+
+async def _fetch_hyperliquid_candles(inst_id: str, bar: str, limit: int, httpx):
+    """从 Hyperliquid DEX 获取 K线数据，返回 [[ts_ms, o, h, l, c, v], ...] 或 None"""
+    import time
+
+    coin = inst_id.split("-")[0].upper()  # BTC-USDT → BTC
+
+    # 时间周期映射
+    hl_interval_map = {
+        "1m": "1m", "5m": "5m", "15m": "15m", "1H": "1h",
+        "4H": "4h", "1D": "1d",
+    }
+    hl_tf = hl_interval_map.get(bar)
+    if not hl_tf:
+        return None
+
+    # 计算时间范围（毫秒）
+    interval_seconds = {
+        "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400,
+    }
+    secs = interval_seconds.get(hl_tf, 3600)
+    end_ms = int(time.time() * 1000)
+    start_ms = end_ms - limit * secs * 1000
+
+    async with httpx.AsyncClient(timeout=8) as client:
+        resp = await client.post(
+            "https://api.hyperliquid.xyz/info",
+            json={
+                "type": "candleSnapshot",
+                "req": {
+                    "coin": coin,
+                    "interval": hl_tf,
+                    "startTime": start_ms,
+                    "endTime": end_ms,
+                },
+            },
+        )
+        if resp.status_code != 200:
+            return None
+        raw = resp.json()
+        if not isinstance(raw, list) or len(raw) == 0:
+            return None
+
+        candles = []
+        for d in raw:
+            candles.append([
+                str(int(d["t"])),      # timestamp ms
+                d["o"],                 # open
+                d["h"],                 # high
+                d["l"],                 # low
+                d["c"],                 # close
+                d["v"],                 # volume
+            ])
+        return candles
 
 
 @router.get("/index/candles")
