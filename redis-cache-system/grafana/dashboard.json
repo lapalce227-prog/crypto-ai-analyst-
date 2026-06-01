@@ -1,0 +1,62 @@
+{
+  "title": "Redis Cache Monitor",
+  "panels": [
+    {
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "rate(redis_keyspace_hits_total[1m]) / (rate(redis_keyspace_hits_total[1m]) + rate(redis_keyspace_misses_total[1m])) * 100"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "steps": [{"value": 85, "color": "red"}, {"value": 95, "color": "green"}] } } },
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 }
+    },
+    {
+      "title": "Cache Hit Rate (Time Series)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(redis_keyspace_hits_total[1m]) / (rate(redis_keyspace_hits_total[1m]) + rate(redis_keyspace_misses_total[1m])) * 100",
+          "legendFormat": "Hit Rate %"
+        }
+      ],
+      "gridPos": { "x": 8, "y": 0, "w": 16, "h": 8 }
+    },
+    {
+      "title": "Memory Usage",
+      "type": "gauge",
+      "targets": [{ "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100 } },
+      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 4 }
+    },
+    {
+      "title": "Connected Clients",
+      "type": "stat",
+      "targets": [{ "expr": "redis_connected_clients" }],
+      "gridPos": { "x": 0, "y": 8, "w": 4, "h": 3 }
+    },
+    {
+      "title": "Slow Log Count (5m rate)",
+      "type": "stat",
+      "targets": [{ "expr": "rate(redis_slowlog_count[5m])" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{"value": 10, "color": "red"}] } } },
+      "gridPos": { "x": 4, "y": 8, "w": 4, "h": 3 }
+    },
+    {
+      "title": "Memory Fragmentation Ratio",
+      "type": "stat",
+      "targets": [{ "expr": "redis_mem_fragmentation_ratio" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{"value": 1.5, "color": "red"}] } } },
+      "gridPos": { "x": 8, "y": 8, "w": 4, "h": 3 }
+    },
+    {
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(http_requests_total[1m])", "legendFormat": "{{method}} {{handler}}" }
+      ],
+      "gridPos": { "x": 0, "y": 11, "w": 24, "h": 8 }
+    }
+  ]
+}

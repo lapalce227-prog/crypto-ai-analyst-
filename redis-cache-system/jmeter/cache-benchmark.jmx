@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testname="Redis Cache Benchmark">
+      <stringProp name="TestPlan.comments">JMeter test plan for benchmarking FastAPI + Redis cache system</stringProp>
+      <boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="BASE_URL" elementType="Argument">
+            <stringProp name="Argument.value">localhost</stringProp>
+          </elementProp>
+          <elementProp name="PORT" elementType="Argument">
+            <stringProp name="Argument.value">8000</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <!-- Thread Group: 200 concurrent users, 10s ramp-up, 50 loops = 10000 requests -->
+      <ThreadGroup guiclass="ThreadGroupGui" testname="200 Users - Cache Benchmark">
+        <intProp name="ThreadGroup.num_threads">200</intProp>
+        <intProp name="ThreadGroup.ramp_time">10</intProp>
+        <intProp name="ThreadGroup.loops">50</intProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+      </ThreadGroup>
+      <hashTree>
+        <!-- Step 1: Read articles (random IDs 1-500, cache miss then hit) -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testname="GET Random Article (cached)">
+          <stringProp name="HTTPSampler.domain">${BASE_URL}</stringProp>
+          <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+          <stringProp name="HTTPSampler.path">/api/articles/${__Random(1,500)}</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+
+        <!-- Step 2: Non-existent articles (should be blocked by Bloom filter) -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testname="GET Non-existent Article (bloom blocked)">
+          <stringProp name="HTTPSampler.domain">${BASE_URL}</stringProp>
+          <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+          <stringProp name="HTTPSampler.path">/api/articles/${__Random(501,999999)}</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+
+        <!-- Step 3: Health + Stats endpoint -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testname="GET Stats">
+          <stringProp name="HTTPSampler.domain">${BASE_URL}</stringProp>
+          <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+          <stringProp name="HTTPSampler.path">/api/stats</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+      </hashTree>
+
+      <!-- Aggregate Report Listener -->
+      <ResultCollector guiclass="StatVisualizer" testname="Aggregate Report">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <!-- View Results Tree (for debugging) -->
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testname="View Results Tree">
+        <boolProp name="ResultCollector.error_logging">true</boolProp>
+      </ResultCollector>
+      <hashTree/>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

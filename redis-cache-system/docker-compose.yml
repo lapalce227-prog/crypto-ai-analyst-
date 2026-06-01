@@ -1,0 +1,75 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+      - redis-slave-1
+      - redis-slave-2
+      - sentinel-1
+      - sentinel-2
+      - sentinel-3
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --port 6379 --replica-announce-ip redis
+    ports:
+      - "6379:6379"
+
+  redis-slave-1:
+    image: redis:7-alpine
+    command: redis-server --port 6380 --slaveof redis 6379 --replica-announce-ip redis-slave-1
+    depends_on:
+      - redis
+
+  redis-slave-2:
+    image: redis:7-alpine
+    command: redis-server --port 6381 --slaveof redis 6379 --replica-announce-ip redis-slave-2
+    depends_on:
+      - redis
+
+  sentinel-1:
+    image: redis:7-alpine
+    command: >
+      redis-sentinel /etc/sentinel.conf
+    volumes:
+      - ./sentinel.conf:/etc/sentinel.conf
+    depends_on:
+      - redis
+
+  sentinel-2:
+    image: redis:7-alpine
+    command: >
+      redis-sentinel /etc/sentinel.conf
+    volumes:
+      - ./sentinel.conf:/etc/sentinel.conf
+    depends_on:
+      - redis
+
+  sentinel-3:
+    image: redis:7-alpine
+    command: >
+      redis-sentinel /etc/sentinel.conf
+    volumes:
+      - ./sentinel.conf:/etc/sentinel.conf
+    depends_on:
+      - redis
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true

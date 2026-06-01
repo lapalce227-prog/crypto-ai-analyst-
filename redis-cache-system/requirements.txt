@@ -1,0 +1,4 @@
+redis>=5.0
+fastapi>=0.110
+uvicorn[standard]>=0.29
+prometheus-fastapi-instrumentator>=7.0
